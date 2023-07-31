@@ -309,6 +309,43 @@ void generate_inside_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per
 }
 
 template <typename Type_T>
+void generate_voxel_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+		VoxelMesher::Output::CollisionSurface *collision_surface, 
+                std::vector<int> &index_offsets, int &collision_surface_index_offset,
+                FixedArray<int, Cube::SIDE_COUNT> side_neighbor_lut, FixedArray<int, Cube::EDGE_COUNT> edge_neighbor_lut,
+                FixedArray<int, Cube::CORNER_COUNT> corner_neighbor_lut,
+                const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
+                bool bake_occlusion, float baked_occlusion_darkness, const int voxel_index,
+                unsigned int x, unsigned int y, unsigned int z) {
+        const int voxel_id = type_buffer[voxel_index];
+
+        if (voxel_id == VoxelBlockyModel::AIR_ID || !library.has_model(voxel_id)) {
+                return;
+        }
+
+        const VoxelBlockyModel::BakedData &voxel = library.models[voxel_id];
+        const VoxelBlockyModel::BakedData::Model &model = voxel.model;
+
+        // Hybrid approach: extract cube faces and decimate those that aren't visible,
+        // and still allow voxels to have geometry that is not a cube.
+
+        // Sides
+        for (unsigned int side = 0; side < Cube::SIDE_COUNT; ++side) {
+                generate_side_mesh(out_arrays_per_material, collision_surface, type_buffer, 
+                                library, bake_occlusion, baked_occlusion_darkness,
+                                index_offsets, collision_surface_index_offset, 
+                                side_neighbor_lut, edge_neighbor_lut, corner_neighbor_lut,
+                                x, y, z, side, voxel_index, voxel, model);
+        }
+
+        // Inside
+        for (unsigned int surface_index = 0; surface_index < model.surface_count; ++surface_index) {
+                generate_inside_mesh(out_arrays_per_material, collision_surface, index_offsets,
+                                collision_surface_index_offset, x, y, z, voxel, model.surfaces[surface_index]);
+        }
+}
+
+template <typename Type_T>
 void generate_blocky_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface, const Span<Type_T> type_buffer,
 		const Vector3i block_size, const VoxelBlockyLibraryBase::BakedData &library, bool bake_occlusion,
@@ -400,33 +437,10 @@ void generate_blocky_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per
 				// check
 
 				const int voxel_index = y + x * row_size + z * deck_size;
-				const int voxel_id = type_buffer[voxel_index];
-
-				if (voxel_id == VoxelBlockyModel::AIR_ID || !library.has_model(voxel_id)) {
-					continue;
-				}
-
-				const VoxelBlockyModel::BakedData &voxel = library.models[voxel_id];
-				const VoxelBlockyModel::BakedData::Model &model = voxel.model;
-
-				// Hybrid approach: extract cube faces and decimate those that aren't visible,
-				// and still allow voxels to have geometry that is not a cube.
-
-				// Sides
-				for (unsigned int side = 0; side < Cube::SIDE_COUNT; ++side) {
-					generate_side_mesh(out_arrays_per_material, collision_surface, type_buffer, 
-                                                        library, bake_occlusion, baked_occlusion_darkness,
-                                                        index_offsets, collision_surface_index_offset, side_neighbor_lut,
-                                                        edge_neighbor_lut, corner_neighbor_lut,
-                                                        x, y, z, side, voxel_index, voxel, model);
-				}
-
-				// Inside
-				for (unsigned int surface_index = 0; surface_index < model.surface_count; ++surface_index) {
-					const VoxelBlockyModel::BakedData::Surface &surface = model.surfaces[surface_index];
-					generate_inside_mesh(out_arrays_per_material, collision_surface, index_offsets,
-                                                        collision_surface_index_offset, x, y, z, voxel, surface);
-				}
+				generate_voxel_mesh(out_arrays_per_material, collision_surface, index_offsets, 
+                                                collision_surface_index_offset, side_neighbor_lut, edge_neighbor_lut,
+                                                corner_neighbor_lut, type_buffer, library, bake_occlusion,
+                                                baked_occlusion_darkness, voxel_index, x, y, z);
 			}
 		}
 	}
