@@ -122,6 +122,114 @@ void bake_surface_occlusion(const std::vector<Vector3f> &side_positions, const u
         }
 }
 
+void generate_side_surface(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+		VoxelMesher::Output::CollisionSurface *collision_surface,
+		bool bake_occlusion, float baked_occlusion_darkness, int shaded_corner[],
+                std::vector<int> &index_offsets, int &collision_surface_index_offset,
+                unsigned int side, const VoxelBlockyModel::BakedData &voxel, const Vector3f &pos,
+                const VoxelBlockyModel::BakedData::Surface &surface) {
+
+        VoxelMesherBlocky::Arrays &arrays = out_arrays_per_material[surface.material_id];
+
+        ZN_ASSERT(surface.material_id >= 0 && surface.material_id < index_offsets.size());
+        int &index_offset = index_offsets[surface.material_id];
+
+        const std::vector<Vector3f> &side_positions = surface.side_positions[side];
+        const unsigned int vertex_count = side_positions.size();
+
+        const std::vector<Vector2f> &side_uvs = surface.side_uvs[side];
+        const std::vector<float> &side_tangents = surface.side_tangents[side];
+
+        // Append vertices of the faces in one go, don't use push_back
+
+        {
+                const int append_index = arrays.positions.size();
+                arrays.positions.resize(arrays.positions.size() + vertex_count);
+                Vector3f *w = arrays.positions.data() + append_index;
+                for (unsigned int i = 0; i < vertex_count; ++i) {
+                        w[i] = side_positions[i] + pos;
+                }
+        }
+
+        {
+                const int append_index = arrays.uvs.size();
+                arrays.uvs.resize(arrays.uvs.size() + vertex_count);
+                memcpy(arrays.uvs.data() + append_index, side_uvs.data(), vertex_count * sizeof(Vector2f));
+        }
+
+        if (side_tangents.size() > 0) {
+                const int append_index = arrays.tangents.size();
+                arrays.tangents.resize(arrays.tangents.size() + vertex_count * 4);
+                memcpy(arrays.tangents.data() + append_index, side_tangents.data(),
+                                (vertex_count * 4) * sizeof(float));
+        }
+
+        {
+                const int append_index = arrays.normals.size();
+                arrays.normals.resize(arrays.normals.size() + vertex_count);
+                Vector3f *w = arrays.normals.data() + append_index;
+                for (unsigned int i = 0; i < vertex_count; ++i) {
+                        w[i] = to_vec3f(Cube::g_side_normals[side]);
+                }
+        }
+
+        {
+                const int append_index = arrays.colors.size();
+                arrays.colors.resize(arrays.colors.size() + vertex_count);
+                Color *w = arrays.colors.data() + append_index;
+                const Color modulate_color = voxel.color;
+
+                if (bake_occlusion) {
+                        bake_surface_occlusion(side_positions, vertex_count, side, shaded_corner,
+                                        baked_occlusion_darkness, modulate_color, w);
+
+                } else {
+                        for (unsigned int i = 0; i < vertex_count; ++i) {
+                                w[i] = modulate_color;
+                        }
+                }
+        }
+
+        const std::vector<int> &side_indices = surface.side_indices[side];
+        const unsigned int index_count = side_indices.size();
+
+        {
+                int i = arrays.indices.size();
+                arrays.indices.resize(arrays.indices.size() + index_count);
+                int *w = arrays.indices.data();
+                for (unsigned int j = 0; j < index_count; ++j) {
+                        w[i++] = index_offset + side_indices[j];
+                }
+        }
+
+        if (collision_surface != nullptr && surface.collision_enabled) {
+                std::vector<Vector3f> &dst_positions = collision_surface->positions;
+                std::vector<int> &dst_indices = collision_surface->indices;
+
+                {
+                        const unsigned int append_index = dst_positions.size();
+                        dst_positions.resize(dst_positions.size() + vertex_count);
+                        Vector3f *w = dst_positions.data() + append_index;
+                        for (unsigned int i = 0; i < vertex_count; ++i) {
+                                w[i] = side_positions[i] + pos;
+                        }
+                }
+
+                {
+                        int i = dst_indices.size();
+                        dst_indices.resize(dst_indices.size() + index_count);
+                        int *w = dst_indices.data();
+                        for (unsigned int j = 0; j < index_count; ++j) {
+                                w[i++] = collision_surface_index_offset + side_indices[j];
+                        }
+                }
+
+                collision_surface_index_offset += vertex_count;
+        }
+
+        index_offset += vertex_count;
+}
+
 template <typename Type_T>
 void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface, const Span<Type_T> type_buffer,
@@ -155,107 +263,9 @@ void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_m
         Vector3f pos(x - 1, y - 1, z - 1);
 
         for (unsigned int surface_index = 0; surface_index < model.surface_count; ++surface_index) {
-                const VoxelBlockyModel::BakedData::Surface &surface = model.surfaces[surface_index];
-
-                VoxelMesherBlocky::Arrays &arrays = out_arrays_per_material[surface.material_id];
-
-                ZN_ASSERT(surface.material_id >= 0 && surface.material_id < index_offsets.size());
-                int &index_offset = index_offsets[surface.material_id];
-
-                const std::vector<Vector3f> &side_positions = surface.side_positions[side];
-                const unsigned int vertex_count = side_positions.size();
-
-                const std::vector<Vector2f> &side_uvs = surface.side_uvs[side];
-                const std::vector<float> &side_tangents = surface.side_tangents[side];
-
-                // Append vertices of the faces in one go, don't use push_back
-
-                {
-                        const int append_index = arrays.positions.size();
-                        arrays.positions.resize(arrays.positions.size() + vertex_count);
-                        Vector3f *w = arrays.positions.data() + append_index;
-                        for (unsigned int i = 0; i < vertex_count; ++i) {
-                                w[i] = side_positions[i] + pos;
-                        }
-                }
-
-                {
-                        const int append_index = arrays.uvs.size();
-                        arrays.uvs.resize(arrays.uvs.size() + vertex_count);
-                        memcpy(arrays.uvs.data() + append_index, side_uvs.data(), vertex_count * sizeof(Vector2f));
-                }
-
-                if (side_tangents.size() > 0) {
-                        const int append_index = arrays.tangents.size();
-                        arrays.tangents.resize(arrays.tangents.size() + vertex_count * 4);
-                        memcpy(arrays.tangents.data() + append_index, side_tangents.data(),
-                                        (vertex_count * 4) * sizeof(float));
-                }
-
-                {
-                        const int append_index = arrays.normals.size();
-                        arrays.normals.resize(arrays.normals.size() + vertex_count);
-                        Vector3f *w = arrays.normals.data() + append_index;
-                        for (unsigned int i = 0; i < vertex_count; ++i) {
-                                w[i] = to_vec3f(Cube::g_side_normals[side]);
-                        }
-                }
-
-                {
-                        const int append_index = arrays.colors.size();
-                        arrays.colors.resize(arrays.colors.size() + vertex_count);
-                        Color *w = arrays.colors.data() + append_index;
-                        const Color modulate_color = voxel.color;
-
-                        if (bake_occlusion) {
-                                bake_surface_occlusion(side_positions, vertex_count, side, shaded_corner,
-                                                baked_occlusion_darkness, modulate_color, w);
-
-                        } else {
-                                for (unsigned int i = 0; i < vertex_count; ++i) {
-                                        w[i] = modulate_color;
-                                }
-                        }
-                }
-
-                const std::vector<int> &side_indices = surface.side_indices[side];
-                const unsigned int index_count = side_indices.size();
-
-                {
-                        int i = arrays.indices.size();
-                        arrays.indices.resize(arrays.indices.size() + index_count);
-                        int *w = arrays.indices.data();
-                        for (unsigned int j = 0; j < index_count; ++j) {
-                                w[i++] = index_offset + side_indices[j];
-                        }
-                }
-
-                if (collision_surface != nullptr && surface.collision_enabled) {
-                        std::vector<Vector3f> &dst_positions = collision_surface->positions;
-                        std::vector<int> &dst_indices = collision_surface->indices;
-
-                        {
-                                const unsigned int append_index = dst_positions.size();
-                                dst_positions.resize(dst_positions.size() + vertex_count);
-                                Vector3f *w = dst_positions.data() + append_index;
-                                for (unsigned int i = 0; i < vertex_count; ++i) {
-                                        w[i] = side_positions[i] + pos;
-                                }
-                        }
-
-                        {
-                                int i = dst_indices.size();
-                                dst_indices.resize(dst_indices.size() + index_count);
-                                int *w = dst_indices.data();
-                                for (unsigned int j = 0; j < index_count; ++j) {
-                                        w[i++] = collision_surface_index_offset + side_indices[j];
-                                }
-                        }
-
-                        collision_surface_index_offset += vertex_count;
-                }
-
-                index_offset += vertex_count;
+                generate_side_surface(out_arrays_per_material, collision_surface, bake_occlusion,
+                                baked_occlusion_darkness, shaded_corner, index_offsets,
+                                collision_surface_index_offset, side, voxel, pos, model.surfaces[surface_index]);
         }
 }
 
