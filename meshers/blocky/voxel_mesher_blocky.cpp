@@ -55,7 +55,7 @@ std::vector<int> &get_tls_index_offsets() {
 
 
 template <typename Type_T>
-void bake_side_occlusion(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
+void shade_corners(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
                 float baked_occlusion_darkness, FixedArray<int, Cube::EDGE_COUNT> edge_neighbor_lut,
                 FixedArray<int, Cube::CORNER_COUNT> corner_neighbor_lut, unsigned int side,
                 const int voxel_index, int shaded_corner[]) {
@@ -115,9 +115,9 @@ void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_m
         int shaded_corner[8] = { 0 };
 
         if (bake_occlusion) {
-                bake_side_occlusion(type_buffer, library, baked_occlusion_darkness,
-                edge_neighbor_lut,  corner_neighbor_lut, side,
-                voxel_index, shaded_corner);
+                shade_corners(type_buffer, library, baked_occlusion_darkness,
+                                edge_neighbor_lut,  corner_neighbor_lut, side,
+                                voxel_index, shaded_corner);
         }
 
         // Subtracting 1 because the data is padded
