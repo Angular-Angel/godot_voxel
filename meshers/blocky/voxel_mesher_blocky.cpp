@@ -56,7 +56,7 @@ std::vector<int> &get_tls_index_offsets() {
 
 template <typename Type_T>
 void shade_corners(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
-                float baked_occlusion_darkness, FixedArray<int, Cube::EDGE_COUNT> edge_neighbor_lut,
+                FixedArray<int, Cube::EDGE_COUNT> edge_neighbor_lut,
                 FixedArray<int, Cube::CORNER_COUNT> corner_neighbor_lut, unsigned int side,
                 const int voxel_index, int shaded_corner[]) {
         // Combinatory solution for
@@ -90,6 +90,38 @@ void shade_corners(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase:
 
 }
 
+void bake_surface_occlusion(const std::vector<Vector3f> &side_positions, const unsigned int vertex_count, unsigned int side, 
+                int shaded_corner[], float baked_occlusion_darkness, const Color modulate_color, Color *w) {
+        for (unsigned int i = 0; i < vertex_count; ++i) {
+                const Vector3f vertex_pos = side_positions[i];
+
+                // General purpose occlusion colouring.
+                // TODO Optimize for cubes
+                // TODO Fix occlusion inconsistency caused by triangles orientation? Not sure if
+                // worth it
+                float shade = 0;
+                for (unsigned int j = 0; j < 4; ++j) {
+                        unsigned int corner = Cube::g_side_corners[side][j];
+                        if (shaded_corner[corner]) {
+                                float s = baked_occlusion_darkness *
+                                                static_cast<float>(shaded_corner[corner]);
+                                // float k = 1.f - Cube::g_corner_position[corner].distance_to(v);
+                                float k = 1.f -
+                                                math::distance_squared(Cube::g_corner_position[corner], vertex_pos);
+                                if (k < 0.0) {
+                                        k = 0.0;
+                                }
+                                s *= k;
+                                if (s > shade) {
+                                        shade = s;
+                                }
+                        }
+                }
+                const float gs = 1.0 - shade;
+                w[i] = Color(gs, gs, gs) * modulate_color;
+        }
+}
+
 template <typename Type_T>
 void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface, const Span<Type_T> type_buffer,
@@ -115,9 +147,8 @@ void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_m
         int shaded_corner[8] = { 0 };
 
         if (bake_occlusion) {
-                shade_corners(type_buffer, library, baked_occlusion_darkness,
-                                edge_neighbor_lut,  corner_neighbor_lut, side,
-                                voxel_index, shaded_corner);
+                shade_corners(type_buffer, library, edge_neighbor_lut,  corner_neighbor_lut,
+                                side, voxel_index, shaded_corner);
         }
 
         // Subtracting 1 because the data is padded
@@ -177,34 +208,8 @@ void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_m
                         const Color modulate_color = voxel.color;
 
                         if (bake_occlusion) {
-                                for (unsigned int i = 0; i < vertex_count; ++i) {
-                                        const Vector3f vertex_pos = side_positions[i];
-
-                                        // General purpose occlusion colouring.
-                                        // TODO Optimize for cubes
-                                        // TODO Fix occlusion inconsistency caused by triangles orientation? Not sure if
-                                        // worth it
-                                        float shade = 0;
-                                        for (unsigned int j = 0; j < 4; ++j) {
-                                                unsigned int corner = Cube::g_side_corners[side][j];
-                                                if (shaded_corner[corner]) {
-                                                        float s = baked_occlusion_darkness *
-                                                                        static_cast<float>(shaded_corner[corner]);
-                                                        // float k = 1.f - Cube::g_corner_position[corner].distance_to(v);
-                                                        float k = 1.f -
-                                                                        math::distance_squared(Cube::g_corner_position[corner], vertex_pos);
-                                                        if (k < 0.0) {
-                                                                k = 0.0;
-                                                        }
-                                                        s *= k;
-                                                        if (s > shade) {
-                                                                shade = s;
-                                                        }
-                                                }
-                                        }
-                                        const float gs = 1.0 - shade;
-                                        w[i] = Color(gs, gs, gs) * modulate_color;
-                                }
+                                bake_surface_occlusion(side_positions, vertex_count, side, shaded_corner,
+                                                baked_occlusion_darkness, modulate_color, w);
 
                         } else {
                                 for (unsigned int i = 0; i < vertex_count; ++i) {
