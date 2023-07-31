@@ -53,6 +53,43 @@ std::vector<int> &get_tls_index_offsets() {
 
 } // namespace
 
+
+template <typename Type_T>
+void bake_side_occlusion(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
+                float baked_occlusion_darkness, FixedArray<int, Cube::EDGE_COUNT> edge_neighbor_lut,
+                FixedArray<int, Cube::CORNER_COUNT> corner_neighbor_lut, unsigned int side,
+                const int voxel_index, int shaded_corner[]) {
+        // Combinatory solution for
+        // https://0fps.net/2013/07/03/ambient-occlusion-for-minecraft-like-worlds/ (inverted)
+        //	function vertexAO(side1, side2, corner) {
+        //	  if(side1 && side2) {
+        //		return 0
+        //	  }
+        //	  return 3 - (side1 + side2 + corner)
+        //	}
+
+        for (unsigned int j = 0; j < 4; ++j) {
+                const unsigned int edge = Cube::g_side_edges[side][j];
+                const int edge_neighbor_id = type_buffer[voxel_index + edge_neighbor_lut[edge]];
+                if (contributes_to_ao(library, edge_neighbor_id)) {
+                        ++shaded_corner[Cube::g_edge_corners[edge][0]];
+                        ++shaded_corner[Cube::g_edge_corners[edge][1]];
+                }
+        }
+        for (unsigned int j = 0; j < 4; ++j) {
+                const unsigned int corner = Cube::g_side_corners[side][j];
+                if (shaded_corner[corner] == 2) {
+                        shaded_corner[corner] = 3;
+                } else {
+                        const int corner_neigbor_id = type_buffer[voxel_index + corner_neighbor_lut[corner]];
+                        if (contributes_to_ao(library, corner_neigbor_id)) {
+                                ++shaded_corner[corner];
+                        }
+                }
+        }
+
+}
+
 template <typename Type_T>
 void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface, const Span<Type_T> type_buffer,
@@ -78,34 +115,9 @@ void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_m
         int shaded_corner[8] = { 0 };
 
         if (bake_occlusion) {
-                // Combinatory solution for
-                // https://0fps.net/2013/07/03/ambient-occlusion-for-minecraft-like-worlds/ (inverted)
-                //	function vertexAO(side1, side2, corner) {
-                //	  if(side1 && side2) {
-                //		return 0
-                //	  }
-                //	  return 3 - (side1 + side2 + corner)
-                //	}
-
-                for (unsigned int j = 0; j < 4; ++j) {
-                        const unsigned int edge = Cube::g_side_edges[side][j];
-                        const int edge_neighbor_id = type_buffer[voxel_index + edge_neighbor_lut[edge]];
-                        if (contributes_to_ao(library, edge_neighbor_id)) {
-                                ++shaded_corner[Cube::g_edge_corners[edge][0]];
-                                ++shaded_corner[Cube::g_edge_corners[edge][1]];
-                        }
-                }
-                for (unsigned int j = 0; j < 4; ++j) {
-                        const unsigned int corner = Cube::g_side_corners[side][j];
-                        if (shaded_corner[corner] == 2) {
-                                shaded_corner[corner] = 3;
-                        } else {
-                                const int corner_neigbor_id = type_buffer[voxel_index + corner_neighbor_lut[corner]];
-                                if (contributes_to_ao(library, corner_neigbor_id)) {
-                                        ++shaded_corner[corner];
-                                }
-                        }
-                }
+                bake_side_occlusion(type_buffer, library, baked_occlusion_darkness,
+                edge_neighbor_lut,  corner_neighbor_lut, side,
+                voxel_index, shaded_corner);
         }
 
         // Subtracting 1 because the data is padded
