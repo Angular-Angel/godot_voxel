@@ -53,11 +53,69 @@ std::vector<int> &get_tls_index_offsets() {
 
 } // namespace
 
+struct NeighborLUTs {
+        FixedArray<int, Cube::SIDE_COUNT> sides;
+	FixedArray<int, Cube::EDGE_COUNT> edges;
+	FixedArray<int, Cube::CORNER_COUNT> corners;
+};
+
+NeighborLUTs generate_neighbor_luts(const int row_size, const int deck_size) {
+        NeighborLUTs neighbor_luts;
+
+	neighbor_luts.sides[Cube::SIDE_LEFT] = row_size;
+	neighbor_luts.sides[Cube::SIDE_RIGHT] = -row_size;
+	neighbor_luts.sides[Cube::SIDE_BACK] = -deck_size;
+	neighbor_luts.sides[Cube::SIDE_FRONT] = deck_size;
+	neighbor_luts.sides[Cube::SIDE_BOTTOM] = -1;
+	neighbor_luts.sides[Cube::SIDE_TOP] = 1;
+
+	neighbor_luts.edges[Cube::EDGE_BOTTOM_BACK] =
+			neighbor_luts.sides[Cube::SIDE_BOTTOM] + neighbor_luts.sides[Cube::SIDE_BACK];
+	neighbor_luts.edges[Cube::EDGE_BOTTOM_FRONT] =
+			neighbor_luts.sides[Cube::SIDE_BOTTOM] + neighbor_luts.sides[Cube::SIDE_FRONT];
+	neighbor_luts.edges[Cube::EDGE_BOTTOM_LEFT] =
+			neighbor_luts.sides[Cube::SIDE_BOTTOM] + neighbor_luts.sides[Cube::SIDE_LEFT];
+	neighbor_luts.edges[Cube::EDGE_BOTTOM_RIGHT] =
+			neighbor_luts.sides[Cube::SIDE_BOTTOM] + neighbor_luts.sides[Cube::SIDE_RIGHT];
+	neighbor_luts.edges[Cube::EDGE_BACK_LEFT] = neighbor_luts.sides[Cube::SIDE_BACK] + neighbor_luts.sides[Cube::SIDE_LEFT];
+	neighbor_luts.edges[Cube::EDGE_BACK_RIGHT] = neighbor_luts.sides[Cube::SIDE_BACK] + neighbor_luts.sides[Cube::SIDE_RIGHT];
+	neighbor_luts.edges[Cube::EDGE_FRONT_LEFT] = neighbor_luts.sides[Cube::SIDE_FRONT] + neighbor_luts.sides[Cube::SIDE_LEFT];
+	neighbor_luts.edges[Cube::EDGE_FRONT_RIGHT] =
+			neighbor_luts.sides[Cube::SIDE_FRONT] + neighbor_luts.sides[Cube::SIDE_RIGHT];
+	neighbor_luts.edges[Cube::EDGE_TOP_BACK] = neighbor_luts.sides[Cube::SIDE_TOP] + neighbor_luts.sides[Cube::SIDE_BACK];
+	neighbor_luts.edges[Cube::EDGE_TOP_FRONT] = neighbor_luts.sides[Cube::SIDE_TOP] + neighbor_luts.sides[Cube::SIDE_FRONT];
+	neighbor_luts.edges[Cube::EDGE_TOP_LEFT] = neighbor_luts.sides[Cube::SIDE_TOP] + neighbor_luts.sides[Cube::SIDE_LEFT];
+	neighbor_luts.edges[Cube::EDGE_TOP_RIGHT] = neighbor_luts.sides[Cube::SIDE_TOP] + neighbor_luts.sides[Cube::SIDE_RIGHT];
+
+	neighbor_luts.corners[Cube::CORNER_BOTTOM_BACK_LEFT] = neighbor_luts.sides[Cube::SIDE_BOTTOM] +
+			neighbor_luts.sides[Cube::SIDE_BACK] + neighbor_luts.sides[Cube::SIDE_LEFT];
+
+	neighbor_luts.corners[Cube::CORNER_BOTTOM_BACK_RIGHT] = neighbor_luts.sides[Cube::SIDE_BOTTOM] +
+			neighbor_luts.sides[Cube::SIDE_BACK] + neighbor_luts.sides[Cube::SIDE_RIGHT];
+
+	neighbor_luts.corners[Cube::CORNER_BOTTOM_FRONT_RIGHT] = neighbor_luts.sides[Cube::SIDE_BOTTOM] +
+			neighbor_luts.sides[Cube::SIDE_FRONT] + neighbor_luts.sides[Cube::SIDE_RIGHT];
+
+	neighbor_luts.corners[Cube::CORNER_BOTTOM_FRONT_LEFT] = neighbor_luts.sides[Cube::SIDE_BOTTOM] +
+			neighbor_luts.sides[Cube::SIDE_FRONT] + neighbor_luts.sides[Cube::SIDE_LEFT];
+
+	neighbor_luts.corners[Cube::CORNER_TOP_BACK_LEFT] =
+			neighbor_luts.sides[Cube::SIDE_TOP] + neighbor_luts.sides[Cube::SIDE_BACK] + neighbor_luts.sides[Cube::SIDE_LEFT];
+
+	neighbor_luts.corners[Cube::CORNER_TOP_BACK_RIGHT] = neighbor_luts.sides[Cube::SIDE_TOP] +
+			neighbor_luts.sides[Cube::SIDE_BACK] + neighbor_luts.sides[Cube::SIDE_RIGHT];
+
+	neighbor_luts.corners[Cube::CORNER_TOP_FRONT_RIGHT] = neighbor_luts.sides[Cube::SIDE_TOP] +
+			neighbor_luts.sides[Cube::SIDE_FRONT] + neighbor_luts.sides[Cube::SIDE_RIGHT];
+
+	neighbor_luts.corners[Cube::CORNER_TOP_FRONT_LEFT] = neighbor_luts.sides[Cube::SIDE_TOP] +
+			neighbor_luts.sides[Cube::SIDE_FRONT] + neighbor_luts.sides[Cube::SIDE_LEFT];
+        return neighbor_luts;
+}
 
 template <typename Type_T>
 void shade_corners(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
-                FixedArray<int, Cube::EDGE_COUNT> edge_neighbor_lut,
-                FixedArray<int, Cube::CORNER_COUNT> corner_neighbor_lut, unsigned int side,
+                NeighborLUTs &neighbor_luts, unsigned int side,
                 const int voxel_index, int shaded_corner[]) {
         // Combinatory solution for
         // https://0fps.net/2013/07/03/ambient-occlusion-for-minecraft-like-worlds/ (inverted)
@@ -70,7 +128,7 @@ void shade_corners(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase:
 
         for (unsigned int j = 0; j < 4; ++j) {
                 const unsigned int edge = Cube::g_side_edges[side][j];
-                const int edge_neighbor_id = type_buffer[voxel_index + edge_neighbor_lut[edge]];
+                const int edge_neighbor_id = type_buffer[voxel_index + neighbor_luts.edges[edge]];
                 if (contributes_to_ao(library, edge_neighbor_id)) {
                         ++shaded_corner[Cube::g_edge_corners[edge][0]];
                         ++shaded_corner[Cube::g_edge_corners[edge][1]];
@@ -81,7 +139,7 @@ void shade_corners(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase:
                 if (shaded_corner[corner] == 2) {
                         shaded_corner[corner] = 3;
                 } else {
-                        const int corner_neigbor_id = type_buffer[voxel_index + corner_neighbor_lut[corner]];
+                        const int corner_neigbor_id = type_buffer[voxel_index + neighbor_luts.corners[corner]];
                         if (contributes_to_ao(library, corner_neigbor_id)) {
                                 ++shaded_corner[corner];
                         }
@@ -235,8 +293,7 @@ void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_m
 		VoxelMesher::Output::CollisionSurface *collision_surface, const Span<Type_T> type_buffer,
 		const VoxelBlockyLibraryBase::BakedData &library, bool bake_occlusion, float baked_occlusion_darkness,
                 std::vector<int> &index_offsets, int &collision_surface_index_offset, 
-                FixedArray<int, Cube::SIDE_COUNT> side_neighbor_lut, FixedArray<int, Cube::EDGE_COUNT> edge_neighbor_lut,
-                FixedArray<int, Cube::CORNER_COUNT> corner_neighbor_lut,
+                NeighborLUTs &neighbor_luts,
                 unsigned int x, unsigned int y, unsigned int z, unsigned int side, const int voxel_index,
                 const VoxelBlockyModel::BakedData &voxel, const VoxelBlockyModel::BakedData::Model &model) {
         if ((model.empty_sides_mask & (1 << side)) != 0) {
@@ -244,7 +301,7 @@ void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_m
                 return;
         }
 
-        const uint32_t neighbor_voxel_id = type_buffer[voxel_index + side_neighbor_lut[side]];
+        const uint32_t neighbor_voxel_id = type_buffer[voxel_index + neighbor_luts.sides[side]];
 
         if (!is_face_visible(library, voxel, neighbor_voxel_id, side)) {
                 return;
@@ -255,7 +312,7 @@ void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_m
         int shaded_corner[8] = { 0 };
 
         if (bake_occlusion) {
-                shade_corners(type_buffer, library, edge_neighbor_lut,  corner_neighbor_lut,
+                shade_corners(type_buffer, library, neighbor_luts,
                                 side, voxel_index, shaded_corner);
         }
 
@@ -339,8 +396,7 @@ template <typename Type_T>
 void generate_voxel_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface, 
                 std::vector<int> &index_offsets, int &collision_surface_index_offset,
-                FixedArray<int, Cube::SIDE_COUNT> side_neighbor_lut, FixedArray<int, Cube::EDGE_COUNT> edge_neighbor_lut,
-                FixedArray<int, Cube::CORNER_COUNT> corner_neighbor_lut,
+                NeighborLUTs &neighbor_luts,
                 const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
                 bool bake_occlusion, float baked_occlusion_darkness, const int voxel_index,
                 unsigned int x, unsigned int y, unsigned int z) {
@@ -361,7 +417,7 @@ void generate_voxel_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_
                 generate_side_mesh(out_arrays_per_material, collision_surface, type_buffer, 
                                 library, bake_occlusion, baked_occlusion_darkness,
                                 index_offsets, collision_surface_index_offset, 
-                                side_neighbor_lut, edge_neighbor_lut, corner_neighbor_lut,
+                                neighbor_luts,
                                 x, y, z, side, voxel_index, voxel, model);
         }
 
@@ -401,58 +457,7 @@ void generate_blocky_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per
 
 	int collision_surface_index_offset = 0;
 
-	FixedArray<int, Cube::SIDE_COUNT> side_neighbor_lut;
-	side_neighbor_lut[Cube::SIDE_LEFT] = row_size;
-	side_neighbor_lut[Cube::SIDE_RIGHT] = -row_size;
-	side_neighbor_lut[Cube::SIDE_BACK] = -deck_size;
-	side_neighbor_lut[Cube::SIDE_FRONT] = deck_size;
-	side_neighbor_lut[Cube::SIDE_BOTTOM] = -1;
-	side_neighbor_lut[Cube::SIDE_TOP] = 1;
-
-	FixedArray<int, Cube::EDGE_COUNT> edge_neighbor_lut;
-	edge_neighbor_lut[Cube::EDGE_BOTTOM_BACK] =
-			side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_BACK];
-	edge_neighbor_lut[Cube::EDGE_BOTTOM_FRONT] =
-			side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_FRONT];
-	edge_neighbor_lut[Cube::EDGE_BOTTOM_LEFT] =
-			side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_LEFT];
-	edge_neighbor_lut[Cube::EDGE_BOTTOM_RIGHT] =
-			side_neighbor_lut[Cube::SIDE_BOTTOM] + side_neighbor_lut[Cube::SIDE_RIGHT];
-	edge_neighbor_lut[Cube::EDGE_BACK_LEFT] = side_neighbor_lut[Cube::SIDE_BACK] + side_neighbor_lut[Cube::SIDE_LEFT];
-	edge_neighbor_lut[Cube::EDGE_BACK_RIGHT] = side_neighbor_lut[Cube::SIDE_BACK] + side_neighbor_lut[Cube::SIDE_RIGHT];
-	edge_neighbor_lut[Cube::EDGE_FRONT_LEFT] = side_neighbor_lut[Cube::SIDE_FRONT] + side_neighbor_lut[Cube::SIDE_LEFT];
-	edge_neighbor_lut[Cube::EDGE_FRONT_RIGHT] =
-			side_neighbor_lut[Cube::SIDE_FRONT] + side_neighbor_lut[Cube::SIDE_RIGHT];
-	edge_neighbor_lut[Cube::EDGE_TOP_BACK] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_BACK];
-	edge_neighbor_lut[Cube::EDGE_TOP_FRONT] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_FRONT];
-	edge_neighbor_lut[Cube::EDGE_TOP_LEFT] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_LEFT];
-	edge_neighbor_lut[Cube::EDGE_TOP_RIGHT] = side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_RIGHT];
-
-	FixedArray<int, Cube::CORNER_COUNT> corner_neighbor_lut;
-
-	corner_neighbor_lut[Cube::CORNER_BOTTOM_BACK_LEFT] = side_neighbor_lut[Cube::SIDE_BOTTOM] +
-			side_neighbor_lut[Cube::SIDE_BACK] + side_neighbor_lut[Cube::SIDE_LEFT];
-
-	corner_neighbor_lut[Cube::CORNER_BOTTOM_BACK_RIGHT] = side_neighbor_lut[Cube::SIDE_BOTTOM] +
-			side_neighbor_lut[Cube::SIDE_BACK] + side_neighbor_lut[Cube::SIDE_RIGHT];
-
-	corner_neighbor_lut[Cube::CORNER_BOTTOM_FRONT_RIGHT] = side_neighbor_lut[Cube::SIDE_BOTTOM] +
-			side_neighbor_lut[Cube::SIDE_FRONT] + side_neighbor_lut[Cube::SIDE_RIGHT];
-
-	corner_neighbor_lut[Cube::CORNER_BOTTOM_FRONT_LEFT] = side_neighbor_lut[Cube::SIDE_BOTTOM] +
-			side_neighbor_lut[Cube::SIDE_FRONT] + side_neighbor_lut[Cube::SIDE_LEFT];
-
-	corner_neighbor_lut[Cube::CORNER_TOP_BACK_LEFT] =
-			side_neighbor_lut[Cube::SIDE_TOP] + side_neighbor_lut[Cube::SIDE_BACK] + side_neighbor_lut[Cube::SIDE_LEFT];
-
-	corner_neighbor_lut[Cube::CORNER_TOP_BACK_RIGHT] = side_neighbor_lut[Cube::SIDE_TOP] +
-			side_neighbor_lut[Cube::SIDE_BACK] + side_neighbor_lut[Cube::SIDE_RIGHT];
-
-	corner_neighbor_lut[Cube::CORNER_TOP_FRONT_RIGHT] = side_neighbor_lut[Cube::SIDE_TOP] +
-			side_neighbor_lut[Cube::SIDE_FRONT] + side_neighbor_lut[Cube::SIDE_RIGHT];
-
-	corner_neighbor_lut[Cube::CORNER_TOP_FRONT_LEFT] = side_neighbor_lut[Cube::SIDE_TOP] +
-			side_neighbor_lut[Cube::SIDE_FRONT] + side_neighbor_lut[Cube::SIDE_LEFT];
+	NeighborLUTs neighbor_luts = generate_neighbor_luts(row_size, deck_size);
 
 	// uint64_t time_prep = Time::get_singleton()->get_ticks_usec() - time_before;
 	// time_before = Time::get_singleton()->get_ticks_usec();
@@ -465,9 +470,9 @@ void generate_blocky_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per
 
 				const int voxel_index = y + x * row_size + z * deck_size;
 				generate_voxel_mesh(out_arrays_per_material, collision_surface, index_offsets, 
-                                                collision_surface_index_offset, side_neighbor_lut, edge_neighbor_lut,
-                                                corner_neighbor_lut, type_buffer, library, bake_occlusion,
-                                                baked_occlusion_darkness, voxel_index, x, y, z);
+                                                collision_surface_index_offset, neighbor_luts, type_buffer,
+                                                library, bake_occlusion, baked_occlusion_darkness,
+                                                voxel_index, x, y, z);
 			}
 		}
 	}
