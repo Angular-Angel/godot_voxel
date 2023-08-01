@@ -148,36 +148,139 @@ void shade_corners(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase:
 
 }
 
-void bake_surface_occlusion(const std::vector<Vector3f> &side_positions, const unsigned int vertex_count, unsigned int side, 
-                int shaded_corner[], float baked_occlusion_darkness, const Color modulate_color, Color *w) {
-        for (unsigned int i = 0; i < vertex_count; ++i) {
-                const Vector3f vertex_pos = side_positions[i];
+Color get_surface_occlusion(const std::vector<Vector3f> &side_positions, const unsigned int vertex_count, unsigned int side, 
+                int shaded_corner[], float baked_occlusion_darkness, const Color modulate_color, int i) {
+        const Vector3f vertex_pos = side_positions[i];
 
-                // General purpose occlusion colouring.
-                // TODO Optimize for cubes
-                // TODO Fix occlusion inconsistency caused by triangles orientation? Not sure if
-                // worth it
-                float shade = 0;
-                for (unsigned int j = 0; j < 4; ++j) {
-                        unsigned int corner = Cube::g_side_corners[side][j];
-                        if (shaded_corner[corner]) {
-                                float s = baked_occlusion_darkness *
-                                                static_cast<float>(shaded_corner[corner]);
-                                // float k = 1.f - Cube::g_corner_position[corner].distance_to(v);
-                                float k = 1.f -
-                                                math::distance_squared(Cube::g_corner_position[corner], vertex_pos);
-                                if (k < 0.0) {
-                                        k = 0.0;
-                                }
-                                s *= k;
-                                if (s > shade) {
-                                        shade = s;
-                                }
+        // General purpose occlusion colouring.
+        // TODO Optimize for cubes
+        // TODO Fix occlusion inconsistency caused by triangles orientation? Not sure if
+        // worth it
+        float shade = 0;
+        for (unsigned int j = 0; j < 4; ++j) {
+                unsigned int corner = Cube::g_side_corners[side][j];
+                if (shaded_corner[corner]) {
+                        float s = baked_occlusion_darkness *
+                                        static_cast<float>(shaded_corner[corner]);
+                        // float k = 1.f - Cube::g_corner_position[corner].distance_to(v);
+                        float k = 1.f -
+                                        math::distance_squared(Cube::g_corner_position[corner], vertex_pos);
+                        if (k < 0.0) {
+                                k = 0.0;
+                        }
+                        s *= k;
+                        if (s > shade) {
+                                shade = s;
                         }
                 }
-                const float gs = 1.0 - shade;
-                w[i] = Color(gs, gs, gs) * modulate_color;
         }
+        const float gs = 1.0 - shade;
+        return Color(gs, gs, gs) * modulate_color;
+}
+
+void generate_side_collision_surface(VoxelMesher::Output::CollisionSurface *collision_surface,
+                const unsigned int vertex_count, int &collision_surface_index_offset,
+                const Vector3f &pos, const std::vector<Vector3f> &side_positions,
+                const std::vector<int> &side_indices, const unsigned int index_count) {
+        std::vector<Vector3f> &dst_positions = collision_surface->positions;
+        std::vector<int> &dst_indices = collision_surface->indices;
+
+        {
+                const unsigned int append_index = dst_positions.size();
+                dst_positions.resize(dst_positions.size() + vertex_count);
+                Vector3f *w = dst_positions.data() + append_index;
+                for (unsigned int i = 0; i < vertex_count; ++i) {
+                        w[i] = side_positions[i] + pos;
+                }
+        }
+
+        {
+                int i = dst_indices.size();
+                dst_indices.resize(dst_indices.size() + index_count);
+                int *w = dst_indices.data();
+                for (unsigned int j = 0; j < index_count; ++j) {
+                        w[i++] = collision_surface_index_offset + side_indices[j];
+                }
+        }
+
+        collision_surface_index_offset += vertex_count;
+}
+
+void append_side_positions(VoxelMesherBlocky::Arrays &arrays, const Vector3f &pos,
+                const std::vector<Vector3f> &side_positions, const unsigned int vertex_count) {
+        
+        const int append_index = arrays.positions.size();
+        arrays.positions.resize(arrays.positions.size() + vertex_count);
+        Vector3f *w = arrays.positions.data() + append_index;
+        for (unsigned int i = 0; i < vertex_count; ++i) {
+                w[i] = side_positions[i] + pos;
+        }
+}
+
+template <typename Type_T>
+void append_array_data(std::vector<Type_T> &target_array, const std::vector<Type_T> &source_array,
+                const unsigned int vertex_count, const unsigned int data_size) {
+
+        const int append_index = target_array.size();
+        target_array.resize(target_array.size() + vertex_count);
+        memcpy(target_array.data() + append_index, source_array.data(), vertex_count * data_size);
+}
+
+template <typename Type_T>
+void append_array_data_from_function(std::vector<Type_T> &target_array, std::function<Type_T(int)> &source_function,
+                const unsigned int vertex_count) {
+
+        const int append_index = target_array.size();
+        target_array.resize(target_array.size() + vertex_count);
+        Type_T *w = target_array.data() + append_index;
+        for (unsigned int i = 0; i < vertex_count; ++i)
+                w[i] = source_function(i);
+}
+
+void append_side_uvs(VoxelMesherBlocky::Arrays &arrays, const std::vector<Vector2f> &side_uvs,
+                const unsigned int vertex_count) {
+        append_array_data(arrays.uvs, side_uvs, vertex_count, sizeof(Vector2f));
+}
+
+void append_side_tangents(VoxelMesherBlocky::Arrays &arrays, const std::vector<float> &side_tangents,
+                const unsigned int vertex_count) {
+        if (side_tangents.size() > 0)
+                append_array_data(arrays.tangents, side_tangents, vertex_count * 4, sizeof(float));
+}
+
+void append_side_normals(VoxelMesherBlocky::Arrays &arrays, const unsigned int vertex_count, unsigned int side) {
+        std::function<Vector3f(int)> source_function = [side] (int i) { return to_vec3f(Cube::g_side_normals[side]); };
+        append_array_data_from_function(arrays.normals, source_function, vertex_count);
+}
+
+void append_side_colors(VoxelMesherBlocky::Arrays &arrays, const unsigned int vertex_count, unsigned int side,
+                const std::vector<Vector3f> &side_positions, bool bake_occlusion, float baked_occlusion_darkness,
+                const Color modulate_color, int shaded_corner[]) {
+
+        std::function<Color(int)> source_function;
+
+        if (bake_occlusion) {
+                source_function = [&] (int i ) {
+                        return get_surface_occlusion(side_positions, vertex_count, side, shaded_corner,
+                                baked_occlusion_darkness, modulate_color, i);
+                };
+        } else {
+                source_function = [&] (int i ) {
+                        return modulate_color;
+                };
+        }
+
+        append_array_data_from_function(arrays.colors, source_function, vertex_count);
+}
+
+void append_side_indices(VoxelMesherBlocky::Arrays &arrays, int &index_offset, 
+                const std::vector<int> &side_indices, const unsigned int index_count) {
+
+        std::function<int(int)> source_function = [&] (int i ) {
+                return index_offset + side_indices[i];
+        };
+
+        append_array_data_from_function(arrays.indices, source_function, index_count);
 }
 
 void generate_side_surface(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
@@ -190,99 +293,33 @@ void generate_side_surface(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_pe
         VoxelMesherBlocky::Arrays &arrays = out_arrays_per_material[surface.material_id];
 
         ZN_ASSERT(surface.material_id >= 0 && surface.material_id < index_offsets.size());
-        int &index_offset = index_offsets[surface.material_id];
 
         const std::vector<Vector3f> &side_positions = surface.side_positions[side];
         const unsigned int vertex_count = side_positions.size();
 
-        const std::vector<Vector2f> &side_uvs = surface.side_uvs[side];
-        const std::vector<float> &side_tangents = surface.side_tangents[side];
-
         // Append vertices of the faces in one go, don't use push_back
 
-        {
-                const int append_index = arrays.positions.size();
-                arrays.positions.resize(arrays.positions.size() + vertex_count);
-                Vector3f *w = arrays.positions.data() + append_index;
-                for (unsigned int i = 0; i < vertex_count; ++i) {
-                        w[i] = side_positions[i] + pos;
-                }
-        }
+        append_side_positions(arrays, pos, side_positions, vertex_count);
 
-        {
-                const int append_index = arrays.uvs.size();
-                arrays.uvs.resize(arrays.uvs.size() + vertex_count);
-                memcpy(arrays.uvs.data() + append_index, side_uvs.data(), vertex_count * sizeof(Vector2f));
-        }
+        append_side_uvs(arrays, surface.side_uvs[side], vertex_count);
 
-        if (side_tangents.size() > 0) {
-                const int append_index = arrays.tangents.size();
-                arrays.tangents.resize(arrays.tangents.size() + vertex_count * 4);
-                memcpy(arrays.tangents.data() + append_index, side_tangents.data(),
-                                (vertex_count * 4) * sizeof(float));
-        }
+        append_side_tangents(arrays, surface.side_tangents[side], vertex_count);
 
-        {
-                const int append_index = arrays.normals.size();
-                arrays.normals.resize(arrays.normals.size() + vertex_count);
-                Vector3f *w = arrays.normals.data() + append_index;
-                for (unsigned int i = 0; i < vertex_count; ++i) {
-                        w[i] = to_vec3f(Cube::g_side_normals[side]);
-                }
-        }
+        append_side_normals(arrays, vertex_count, side);
 
-        {
-                const int append_index = arrays.colors.size();
-                arrays.colors.resize(arrays.colors.size() + vertex_count);
-                Color *w = arrays.colors.data() + append_index;
-                const Color modulate_color = voxel.color;
+        append_side_colors(arrays, vertex_count, side, side_positions, bake_occlusion,
+                        baked_occlusion_darkness, voxel.color, shaded_corner);
 
-                if (bake_occlusion) {
-                        bake_surface_occlusion(side_positions, vertex_count, side, shaded_corner,
-                                        baked_occlusion_darkness, modulate_color, w);
-
-                } else {
-                        for (unsigned int i = 0; i < vertex_count; ++i) {
-                                w[i] = modulate_color;
-                        }
-                }
-        }
-
+        int &index_offset = index_offsets[surface.material_id];
         const std::vector<int> &side_indices = surface.side_indices[side];
         const unsigned int index_count = side_indices.size();
 
-        {
-                int i = arrays.indices.size();
-                arrays.indices.resize(arrays.indices.size() + index_count);
-                int *w = arrays.indices.data();
-                for (unsigned int j = 0; j < index_count; ++j) {
-                        w[i++] = index_offset + side_indices[j];
-                }
-        }
+        append_side_indices(arrays, index_offset, side_indices, index_count);
 
         if (collision_surface != nullptr && surface.collision_enabled) {
-                std::vector<Vector3f> &dst_positions = collision_surface->positions;
-                std::vector<int> &dst_indices = collision_surface->indices;
-
-                {
-                        const unsigned int append_index = dst_positions.size();
-                        dst_positions.resize(dst_positions.size() + vertex_count);
-                        Vector3f *w = dst_positions.data() + append_index;
-                        for (unsigned int i = 0; i < vertex_count; ++i) {
-                                w[i] = side_positions[i] + pos;
-                        }
-                }
-
-                {
-                        int i = dst_indices.size();
-                        dst_indices.resize(dst_indices.size() + index_count);
-                        int *w = dst_indices.data();
-                        for (unsigned int j = 0; j < index_count; ++j) {
-                                w[i++] = collision_surface_index_offset + side_indices[j];
-                        }
-                }
-
-                collision_surface_index_offset += vertex_count;
+                generate_side_collision_surface(collision_surface, vertex_count, 
+                                collision_surface_index_offset, pos, side_positions,
+                                side_indices, index_count);
         }
 
         index_offset += vertex_count;
