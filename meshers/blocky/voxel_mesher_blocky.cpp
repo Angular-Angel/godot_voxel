@@ -242,7 +242,7 @@ void append_side_uvs(VoxelMesherBlocky::Arrays &arrays, const std::vector<Vector
         append_array_data(arrays.uvs, side_uvs, vertex_count, sizeof(Vector2f));
 }
 
-void append_side_tangents(VoxelMesherBlocky::Arrays &arrays, const std::vector<float> &side_tangents,
+void append_tangents(VoxelMesherBlocky::Arrays &arrays, const std::vector<float> &side_tangents,
                 const unsigned int vertex_count) {
         if (side_tangents.size() > 0)
                 append_array_data(arrays.tangents, side_tangents, vertex_count * 4, sizeof(float));
@@ -303,7 +303,7 @@ void generate_side_surface(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_pe
 
         append_side_uvs(arrays, surface.side_uvs[side], vertex_count);
 
-        append_side_tangents(arrays, surface.side_tangents[side], vertex_count);
+        append_tangents(arrays, surface.side_tangents[side], vertex_count);
 
         append_side_normals(arrays, vertex_count, side);
 
@@ -389,12 +389,7 @@ void generate_inside_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per
 
         const Vector3f pos(x - 1, y - 1, z - 1);
 
-        if (tangents.size() > 0) {
-                const int append_index = arrays.tangents.size();
-                arrays.tangents.resize(arrays.tangents.size() + vertex_count * 4);
-                memcpy(arrays.tangents.data() + append_index, tangents.data(),
-                                (vertex_count * 4) * sizeof(float));
-        }
+        append_tangents(arrays, tangents, vertex_count);
 
         for (unsigned int i = 0; i < vertex_count; ++i) {
                 arrays.normals.push_back(normals[i]);
