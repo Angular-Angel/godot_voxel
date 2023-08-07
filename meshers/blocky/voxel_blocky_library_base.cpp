@@ -40,6 +40,10 @@ void VoxelBlockyLibraryBase::_b_bake() {
 	bake();
 }
 
+unsigned int VoxelBlockyLibraryBase::get_material_count() {
+        return _indexed_materials.size();
+}
+
 Ref<Material> VoxelBlockyLibraryBase::get_material_by_index(unsigned int index) const {
 	ERR_FAIL_INDEX_V(index, _indexed_materials.size(), Ref<Material>());
 	return _indexed_materials[index];

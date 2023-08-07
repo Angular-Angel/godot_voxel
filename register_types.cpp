@@ -31,6 +31,7 @@
 #include "meshers/blocky/voxel_mesher_blocky.h"
 #include "meshers/blocky_side/voxel_side_model.h"
 #include "meshers/blocky_side/voxel_side_library.h"
+#include "meshers/blocky_side/voxel_mesher_blocky_side.h"
 #include "meshers/cubes/voxel_mesher_cubes.h"
 #include "meshers/dmc/voxel_mesher_dmc.h"
 #include "meshers/transvoxel/voxel_mesher_transvoxel.h"
@@ -205,9 +206,9 @@ void initialize_voxel_module(ModuleInitializationLevel p_level) {
 		ClassDB::register_class<VoxelBlockyModelMesh>();
 		ClassDB::register_class<VoxelBlockyModelEmpty>();
 		ClassDB::register_class<VoxelSideModel>();
-		ClassDB::register_class<VoxelSideLibrary>();
 		register_abstract_class<VoxelBlockyLibraryBase>();
 		ClassDB::register_class<VoxelBlockyLibrary>();
+		ClassDB::register_class<VoxelSideLibrary>();
 		register_abstract_class<VoxelBlockyAttribute>();
 		ClassDB::register_class<VoxelBlockyAttributeAxis>();
 		ClassDB::register_class<VoxelBlockyAttributeDirection>();
@@ -281,6 +282,7 @@ void initialize_voxel_module(ModuleInitializationLevel p_level) {
 		// Meshers
 		register_abstract_class<VoxelMesher>();
 		ClassDB::register_class<VoxelMesherBlocky>();
+		ClassDB::register_class<VoxelMesherBlockySide>();
 		ClassDB::register_class<VoxelMesherTransvoxel>();
 		ClassDB::register_class<VoxelMesherDMC>();
 		ClassDB::register_class<VoxelMesherCubes>();

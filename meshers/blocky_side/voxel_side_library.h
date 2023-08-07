@@ -50,6 +50,13 @@ public:
 	// Convenience method that returns the index of the added model
 	int add_model(Ref<VoxelSideModel> model);
 
+	const BakedData &get_baked_data() const {
+		return _baked_data;
+	}
+	const RWLock &get_baked_data_rw_lock() const {
+		return _baked_data_rw_lock;
+	}
+
 	Ref<Material> get_material_by_index(unsigned int index) const;
 
 #ifdef TOOLS_ENABLED

@@ -77,9 +77,6 @@ public:
 	}
 
 protected:
-	static void _bind_methods();
-
-private:
 	struct Parameters {
 		float baked_occlusion_darkness = 0.8;
 		bool bake_occlusion = true;
@@ -96,6 +93,8 @@ private:
 
 	// Work cache
 	static Cache &get_tls_cache();
+
+	static void _bind_methods();
 };
 
 } // namespace zylann::voxel

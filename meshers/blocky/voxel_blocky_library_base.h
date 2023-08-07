@@ -71,6 +71,8 @@ public:
 		return _baked_data_rw_lock;
 	}
 
+        unsigned int get_material_count();
+
 	Ref<Material> get_material_by_index(unsigned int index) const;
 
 #ifdef TOOLS_ENABLED
