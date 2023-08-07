@@ -33,6 +33,15 @@ Ref<Material> VoxelSideModel::get_material() const {
 	return _material;
 }
 
+void VoxelSideModel::bake(BakedData &baked_data, MaterialIndexer &materials) const {
+        const unsigned int material_index = materials.get_or_create_index(get_material());
+        baked_data.material_id = material_index;
+}
+
+bool VoxelSideModel::is_empty() const {
+	return get_material().is_null();
+}
+
 void VoxelSideModel::copy_base_properties_from(const VoxelSideModel &src) {
 	_material = src._material;
 }

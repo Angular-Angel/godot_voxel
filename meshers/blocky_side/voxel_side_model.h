@@ -24,6 +24,16 @@ public:
 	// Don't assign a non-empty model at this index.
 	static const uint16_t EMPTY_ID = 0;
 
+        
+	struct BakedData {
+
+                uint32_t material_id = 0;
+
+		inline void clear() {
+			material_id = 0;
+		}
+	};
+
 	VoxelSideModel();
 
 	enum Side {
@@ -40,6 +50,26 @@ public:
 	Ref<Material> get_material() const;
 
 	void copy_base_properties_from(const VoxelSideModel &src);
+
+        bool is_empty() const;
+
+	struct MaterialIndexer {
+		std::vector<Ref<Material>> &materials;
+
+		unsigned int get_or_create_index(const Ref<Material> &p_material) {
+			for (size_t i = 0; i < materials.size(); ++i) {
+				const Ref<Material> &material = materials[i];
+				if (material == p_material) {
+					return i;
+				}
+			}
+			const unsigned int ret = materials.size();
+			materials.push_back(p_material);
+			return ret;
+		}
+	};
+
+        void bake(BakedData &baked_data, MaterialIndexer &materials) const;
 
 protected:
 	bool _set(const StringName &p_name, const Variant &p_value);
