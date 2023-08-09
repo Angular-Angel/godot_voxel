@@ -53,14 +53,8 @@ std::vector<int> &get_tls_index_offsets() {
 
 } // namespace
 
-struct NeighborLUTs {
-        FixedArray<int, Cube::SIDE_COUNT> sides;
-	FixedArray<int, Cube::EDGE_COUNT> edges;
-	FixedArray<int, Cube::CORNER_COUNT> corners;
-};
-
-NeighborLUTs generate_neighbor_luts(const int row_size, const int deck_size) {
-        NeighborLUTs neighbor_luts;
+VoxelMesherBlocky::NeighborLUTs generate_neighbor_luts(const int row_size, const int deck_size) {
+        VoxelMesherBlocky::NeighborLUTs neighbor_luts;
 
 	neighbor_luts.sides[Cube::SIDE_LEFT] = row_size;
 	neighbor_luts.sides[Cube::SIDE_RIGHT] = -row_size;
@@ -115,7 +109,7 @@ NeighborLUTs generate_neighbor_luts(const int row_size, const int deck_size) {
 
 template <typename Type_T>
 void shade_corners(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
-                NeighborLUTs &neighbor_luts, unsigned int side,
+                VoxelMesherBlocky::NeighborLUTs &neighbor_luts, unsigned int side,
                 const int voxel_index, int shaded_corner[]) {
         // Combinatory solution for
         // https://0fps.net/2013/07/03/ambient-occlusion-for-minecraft-like-worlds/ (inverted)
@@ -283,7 +277,7 @@ void append_side_indices(VoxelMesherBlocky::Arrays &arrays, int &index_offset,
         append_array_data_from_function(arrays.indices, source_function, index_count);
 }
 
-void generate_side_surface(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+void VoxelMesherBlocky::generate_side_surface(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface,
 		bool bake_occlusion, float baked_occlusion_darkness, int shaded_corner[],
                 std::vector<int> &index_offsets, int &collision_surface_index_offset,
@@ -326,13 +320,13 @@ void generate_side_surface(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_pe
 }
 
 template <typename Type_T>
-void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+void VoxelMesherBlocky::generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface, const Span<Type_T> type_buffer,
 		const VoxelBlockyLibraryBase::BakedData &library, bool bake_occlusion, float baked_occlusion_darkness,
                 std::vector<int> &index_offsets, int &collision_surface_index_offset, 
-                NeighborLUTs &neighbor_luts,
-                unsigned int x, unsigned int y, unsigned int z, unsigned int side, const int voxel_index,
-                const VoxelBlockyModel::BakedData &voxel, const VoxelBlockyModel::BakedData::Model &model) {
+                VoxelMesherBlocky::NeighborLUTs &neighbor_luts, unsigned int x, unsigned int y, unsigned int z, unsigned int side,
+                const int voxel_index, const VoxelBlockyModel::BakedData &voxel,
+                const VoxelBlockyModel::BakedData::Model &model) {
         if ((model.empty_sides_mask & (1 << side)) != 0) {
                 // This side is empty
                 return;
@@ -425,12 +419,12 @@ void generate_inside_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per
 }
 
 template <typename Type_T>
-void generate_voxel_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+void VoxelMesherBlocky::generate_voxel_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface, 
                 std::vector<int> &index_offsets, int &collision_surface_index_offset,
-                NeighborLUTs &neighbor_luts,
-                const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
-                bool bake_occlusion, float baked_occlusion_darkness, const int voxel_index,
+                VoxelMesherBlocky::NeighborLUTs &neighbor_luts, const Span<Type_T> type_buffer, 
+                const VoxelBlockyLibraryBase::BakedData &library, bool bake_occlusion,
+                float baked_occlusion_darkness, const int voxel_index,
                 unsigned int x, unsigned int y, unsigned int z) {
         const int voxel_id = type_buffer[voxel_index];
 
@@ -461,7 +455,7 @@ void generate_voxel_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_
 }
 
 template <typename Type_T>
-void generate_blocky_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+void VoxelMesherBlocky::generate_blocky_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface, const Span<Type_T> type_buffer,
 		const Vector3i block_size, const VoxelBlockyLibraryBase::BakedData &library, bool bake_occlusion,
 		float baked_occlusion_darkness) {
@@ -489,7 +483,7 @@ void generate_blocky_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per
 
 	int collision_surface_index_offset = 0;
 
-	NeighborLUTs neighbor_luts = generate_neighbor_luts(row_size, deck_size);
+	VoxelMesherBlocky::NeighborLUTs neighbor_luts = generate_neighbor_luts(row_size, deck_size);
 
 	// uint64_t time_prep = Time::get_singleton()->get_ticks_usec() - time_before;
 	// time_before = Time::get_singleton()->get_ticks_usec();
@@ -551,6 +545,17 @@ void VoxelMesherBlocky::set_occlusion_enabled(bool enable) {
 bool VoxelMesherBlocky::get_occlusion_enabled() const {
 	RWLockRead rlock(_parameters_lock);
 	return _parameters.bake_occlusion;
+}
+
+unsigned int VoxelMesherBlocky::get_material_count() const {
+	Parameters params;
+	{
+		RWLockRead rlock(_parameters_lock);
+		params = _parameters;
+	}
+        RWLockRead lock(params.library->get_baked_data_rw_lock());
+        const VoxelBlockyLibraryBase::BakedData &library_baked_data = params.library->get_baked_data();
+        return library_baked_data.indexed_materials_count;
 }
 
 void VoxelMesherBlocky::build(VoxelMesher::Output &output, const VoxelMesher::Input &input) {
@@ -639,11 +644,12 @@ void VoxelMesherBlocky::build(VoxelMesher::Output &output, const VoxelMesher::In
 
 	unsigned int material_count = 0;
 	{
+
+		material_count = get_material_count();
+
 		// We can only access baked data. Only this data is made for multithreaded access.
 		RWLockRead lock(params.library->get_baked_data_rw_lock());
 		const VoxelBlockyLibraryBase::BakedData &library_baked_data = params.library->get_baked_data();
-
-		material_count = library_baked_data.indexed_materials_count;
 
 		if (arrays_per_material.size() < material_count) {
 			arrays_per_material.resize(material_count);

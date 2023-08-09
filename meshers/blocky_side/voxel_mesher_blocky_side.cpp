@@ -52,6 +52,25 @@ Ref<Resource> VoxelMesherBlockySide::duplicate(bool p_subresources) const {
 	return c;
 }
 
+unsigned int VoxelMesherBlockySide::get_material_count() const {
+	Parameters params;
+	{
+		RWLockRead rlock(_parameters_lock);
+		params = _parameters;
+	}
+        RWLockRead lock(params.library->get_baked_data_rw_lock());
+        const VoxelBlockyLibraryBase::BakedData &library_baked_data = params.library->get_baked_data();
+
+	SideParameters side_params;
+	{
+		RWLockRead side_rlock(_side_parameters_lock);
+		side_params = _side_parameters;
+	}
+        RWLockRead side_lock(side_params.library->get_baked_data_rw_lock());
+        const VoxelSideLibrary::BakedData &side_library_baked_data = side_params.library->get_baked_data();
+        return library_baked_data.indexed_materials_count + side_library_baked_data.indexed_materials_count;
+}
+
 Ref<Material> VoxelMesherBlockySide::get_material_by_index(unsigned int index) const {
 	Ref<VoxelBlockyLibraryBase> lib = get_library();
 	if (lib.is_null()) {
@@ -63,6 +82,19 @@ Ref<Material> VoxelMesherBlockySide::get_material_by_index(unsigned int index) c
         } else {
                 return get_side_library()->get_material_by_index(index - lib->get_material_count());
         }
+}
+
+void VoxelMesherBlockySide::generate_side_surface(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+		VoxelMesher::Output::CollisionSurface *collision_surface,
+		bool bake_occlusion, float baked_occlusion_darkness, int shaded_corner[],
+                std::vector<int> &index_offsets, int &collision_surface_index_offset,
+                unsigned int side, const VoxelBlockyModel::BakedData &voxel, const Vector3f &pos,
+                const VoxelBlockyModel::BakedData::Surface &surface) {
+        VoxelMesherBlocky::generate_side_surface(out_arrays_per_material, collision_surface,
+                        bake_occlusion, baked_occlusion_darkness, shaded_corner, index_offsets,
+                        collision_surface_index_offset, side, voxel, pos, surface);
+
+        
 }
 
 #ifdef TOOLS_ENABLED
