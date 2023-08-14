@@ -53,7 +53,7 @@ std::vector<int> &get_tls_index_offsets() {
 
 } // namespace
 
-VoxelMesherBlocky::NeighborLUTs generate_neighbor_luts(const int row_size, const int deck_size) {
+VoxelMesherBlocky::NeighborLUTs VoxelMesherBlocky::generate_neighbor_luts(const int row_size, const int deck_size) {
         VoxelMesherBlocky::NeighborLUTs neighbor_luts;
 
 	neighbor_luts.sides[Cube::SIDE_LEFT] = row_size;
@@ -108,7 +108,7 @@ VoxelMesherBlocky::NeighborLUTs generate_neighbor_luts(const int row_size, const
 }
 
 template <typename Type_T>
-void shade_corners(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
+void VoxelMesherBlocky::shade_corners(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
                 VoxelMesherBlocky::NeighborLUTs &neighbor_luts, unsigned int side,
                 const int voxel_index, int shaded_corner[]) {
         // Combinatory solution for
@@ -172,7 +172,7 @@ Color get_surface_occlusion(const std::vector<Vector3f> &side_positions, const u
         return Color(gs, gs, gs) * modulate_color;
 }
 
-void generate_side_collision_surface(VoxelMesher::Output::CollisionSurface *collision_surface,
+void VoxelMesherBlocky::generate_side_collision_surface(VoxelMesher::Output::CollisionSurface *collision_surface,
                 const unsigned int vertex_count, int &collision_surface_index_offset,
                 const Vector3f &pos, const std::vector<Vector3f> &side_positions,
                 const std::vector<int> &side_indices, const unsigned int index_count) {
@@ -200,7 +200,7 @@ void generate_side_collision_surface(VoxelMesher::Output::CollisionSurface *coll
         collision_surface_index_offset += vertex_count;
 }
 
-void append_side_positions(VoxelMesherBlocky::Arrays &arrays, const Vector3f &pos,
+void VoxelMesherBlocky::append_side_positions(VoxelMesherBlocky::Arrays &arrays, const Vector3f &pos,
                 const std::vector<Vector3f> &side_positions, const unsigned int vertex_count) {
         
         const int append_index = arrays.positions.size();
@@ -231,23 +231,23 @@ void append_array_data_from_function(std::vector<Type_T> &target_array, std::fun
                 w[i] = source_function(i);
 }
 
-void append_side_uvs(VoxelMesherBlocky::Arrays &arrays, const std::vector<Vector2f> &side_uvs,
+void VoxelMesherBlocky::append_side_uvs(VoxelMesherBlocky::Arrays &arrays, const std::vector<Vector2f> &side_uvs,
                 const unsigned int vertex_count) {
         append_array_data(arrays.uvs, side_uvs, vertex_count, sizeof(Vector2f));
 }
 
-void append_tangents(VoxelMesherBlocky::Arrays &arrays, const std::vector<float> &side_tangents,
+void VoxelMesherBlocky::append_tangents(VoxelMesherBlocky::Arrays &arrays, const std::vector<float> &side_tangents,
                 const unsigned int vertex_count) {
         if (side_tangents.size() > 0)
                 append_array_data(arrays.tangents, side_tangents, vertex_count * 4, sizeof(float));
 }
 
-void append_side_normals(VoxelMesherBlocky::Arrays &arrays, const unsigned int vertex_count, unsigned int side) {
+void VoxelMesherBlocky::append_side_normals(VoxelMesherBlocky::Arrays &arrays, const unsigned int vertex_count, unsigned int side) {
         std::function<Vector3f(int)> source_function = [side] (int i) { return to_vec3f(Cube::g_side_normals[side]); };
         append_array_data_from_function(arrays.normals, source_function, vertex_count);
 }
 
-void append_side_colors(VoxelMesherBlocky::Arrays &arrays, const unsigned int vertex_count, unsigned int side,
+void VoxelMesherBlocky::append_side_colors(VoxelMesherBlocky::Arrays &arrays, const unsigned int vertex_count, unsigned int side,
                 const std::vector<Vector3f> &side_positions, bool bake_occlusion, float baked_occlusion_darkness,
                 const Color modulate_color, int shaded_corner[]) {
 
@@ -267,7 +267,7 @@ void append_side_colors(VoxelMesherBlocky::Arrays &arrays, const unsigned int ve
         append_array_data_from_function(arrays.colors, source_function, vertex_count);
 }
 
-void append_side_indices(VoxelMesherBlocky::Arrays &arrays, int &index_offset, 
+void VoxelMesherBlocky::append_side_indices(VoxelMesherBlocky::Arrays &arrays, int &index_offset, 
                 const std::vector<int> &side_indices, const unsigned int index_count) {
 
         std::function<int(int)> source_function = [&] (int i ) {
@@ -358,11 +358,11 @@ void VoxelMesherBlocky::generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays
 }
 
 
-void generate_inside_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+void VoxelMesherBlocky::generate_inside_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface,
                 std::vector<int> &index_offsets, int &collision_surface_index_offset,
-                unsigned int x, unsigned int y, unsigned int z,
-                const VoxelBlockyModel::BakedData &voxel, const VoxelBlockyModel::BakedData::Surface &surface) {
+                unsigned int x, unsigned int y, unsigned int z, const VoxelBlockyModel::BakedData &voxel,
+                const VoxelBlockyModel::BakedData::Surface &surface) {
         if (surface.positions.size() == 0) {
                 return;
         }
@@ -443,8 +443,7 @@ void VoxelMesherBlocky::generate_voxel_mesh(std::vector<VoxelMesherBlocky::Array
                 generate_side_mesh(out_arrays_per_material, collision_surface, type_buffer, 
                                 library, bake_occlusion, baked_occlusion_darkness,
                                 index_offsets, collision_surface_index_offset, 
-                                neighbor_luts,
-                                x, y, z, side, voxel_index, voxel, model);
+                                neighbor_luts, x, y, z, side, voxel_index, voxel, model);
         }
 
         // Inside

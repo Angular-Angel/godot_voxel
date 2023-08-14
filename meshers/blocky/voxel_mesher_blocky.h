@@ -76,7 +76,37 @@ public:
                 FixedArray<int, Cube::CORNER_COUNT> corners;
         };
 
-        virtual void generate_side_surface(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+        NeighborLUTs generate_neighbor_luts(const int row_size, const int deck_size);
+
+        template <typename Type_T>
+        void shade_corners(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
+                VoxelMesherBlocky::NeighborLUTs &neighbor_luts, unsigned int side,
+                const int voxel_index, int shaded_corner[]);
+
+        void generate_side_collision_surface(VoxelMesher::Output::CollisionSurface *collision_surface,
+                const unsigned int vertex_count, int &collision_surface_index_offset,
+                const Vector3f &pos, const std::vector<Vector3f> &side_positions,
+                const std::vector<int> &side_indices, const unsigned int index_count);
+
+        void append_side_positions(VoxelMesherBlocky::Arrays &arrays, const Vector3f &pos,
+                const std::vector<Vector3f> &side_positions, const unsigned int vertex_count);
+
+        void append_side_uvs(VoxelMesherBlocky::Arrays &arrays, const std::vector<Vector2f> &side_uvs,
+                const unsigned int vertex_count);
+
+        void append_tangents(VoxelMesherBlocky::Arrays &arrays, const std::vector<float> &side_tangents,
+                const unsigned int vertex_count);
+
+        void append_side_normals(VoxelMesherBlocky::Arrays &arrays, const unsigned int vertex_count, unsigned int side);
+
+        void append_side_colors(VoxelMesherBlocky::Arrays &arrays, const unsigned int vertex_count, unsigned int side,
+                const std::vector<Vector3f> &side_positions, bool bake_occlusion, float baked_occlusion_darkness,
+                const Color modulate_color, int shaded_corner[]);
+
+        void append_side_indices(VoxelMesherBlocky::Arrays &arrays, int &index_offset, 
+                const std::vector<int> &side_indices, const unsigned int index_count);
+
+        void generate_side_surface(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface,
 		bool bake_occlusion, float baked_occlusion_darkness, int shaded_corner[],
                 std::vector<int> &index_offsets, int &collision_surface_index_offset,
@@ -91,6 +121,12 @@ public:
                 NeighborLUTs &neighbor_luts, unsigned int x, unsigned int y, unsigned int z, unsigned int side,
                 const int voxel_index, const VoxelBlockyModel::BakedData &voxel,
                 const VoxelBlockyModel::BakedData::Model &model);
+
+        void generate_inside_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+		VoxelMesher::Output::CollisionSurface *collision_surface,
+                std::vector<int> &index_offsets, int &collision_surface_index_offset,
+                unsigned int x, unsigned int y, unsigned int z, const VoxelBlockyModel::BakedData &voxel,
+                const VoxelBlockyModel::BakedData::Surface &surface);
 
         template <typename Type_T>
         void generate_voxel_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,

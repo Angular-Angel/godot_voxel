@@ -23,6 +23,8 @@ public:
 	void set_side_library(Ref<VoxelSideLibrary> library);
 	Ref<VoxelSideLibrary> get_side_library() const;
 
+	void build(VoxelMesher::Output &output, const VoxelMesher::Input &input) override;
+
 	// TODO GDX: Resource::duplicate() cannot be overriden (while it can in modules).
 	// This will lead to performance degradation and maybe unexpected behavior
 #if defined(ZN_GODOT)
@@ -39,8 +41,33 @@ public:
 		VoxelMesher::Output::CollisionSurface *collision_surface,
 		bool bake_occlusion, float baked_occlusion_darkness, int shaded_corner[],
                 std::vector<int> &index_offsets, int &collision_surface_index_offset,
-                unsigned int side, const VoxelBlockyModel::BakedData &voxel, const Vector3f &pos,
-                const VoxelBlockyModel::BakedData::Surface &surface) override;
+                unsigned int side, const VoxelBlockyModel::BakedData &voxel,
+                const VoxelSideModel::BakedData &side_model, const Vector3f &pos,
+                const VoxelBlockyModel::BakedData::Surface &surface);
+
+        template <typename Type_T>
+        void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+		VoxelMesher::Output::CollisionSurface *collision_surface, const Span<Type_T> type_buffer,
+		const VoxelBlockyLibraryBase::BakedData &library, bool bake_occlusion, float baked_occlusion_darkness,
+                std::vector<int> &index_offsets, int &collision_surface_index_offset, 
+                NeighborLUTs &neighbor_luts, unsigned int x, unsigned int y, unsigned int z, unsigned int side,
+                const int voxel_index, const VoxelBlockyModel::BakedData &voxel, 
+                const VoxelSideModel::BakedData &side_model, const VoxelBlockyModel::BakedData::Model &voxel_model);
+
+        template <typename Type_T>
+        void generate_voxel_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+		VoxelMesher::Output::CollisionSurface *collision_surface, 
+                std::vector<int> &index_offsets, int &collision_surface_index_offset,
+                VoxelMesherBlocky::NeighborLUTs &neighbor_luts, const VoxelBufferInternal &voxels, const Span<Type_T> type_buffer, 
+                const VoxelSideLibrary::BakedData &side_library, const VoxelBlockyLibraryBase::BakedData &voxel_library,
+                bool bake_occlusion, float baked_occlusion_darkness, const int voxel_index,
+                unsigned int x, unsigned int y, unsigned int z);
+
+        template <typename Type_T>
+        void generate_blocky_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+		VoxelMesher::Output::CollisionSurface *collision_surface, const VoxelBufferInternal &voxels, const Span<Type_T> type_buffer,
+		const Vector3i block_size, const VoxelBlockyLibraryBase::BakedData &library, bool bake_occlusion,
+		float baked_occlusion_darkness);
 
 #ifdef TOOLS_ENABLED
 	void get_configuration_warnings(PackedStringArray &out_warnings) const override;
