@@ -37,6 +37,11 @@ public:
 
 	Ref<Material> get_material_by_index(unsigned int index) const override;
 
+        template <typename Type_T>
+        void shade_corners(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
+                VoxelMesherBlocky::NeighborLUTs &neighbor_luts, unsigned int side,
+                const int voxel_index, int shaded_corner[]);
+
         void generate_side_surface(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface,
 		bool bake_occlusion, float baked_occlusion_darkness, int shaded_corner[],
@@ -44,6 +49,15 @@ public:
                 unsigned int side, const VoxelBlockyModel::BakedData &voxel,
                 const VoxelSideModel::BakedData &side_model, const Vector3f &pos,
                 const VoxelBlockyModel::BakedData::Surface &surface);
+
+        template <typename Type_T>
+        void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+		VoxelMesher::Output::CollisionSurface *collision_surface, const Span<Type_T> type_buffer,
+		const VoxelBlockyLibraryBase::BakedData &library, bool bake_occlusion, float baked_occlusion_darkness,
+                std::vector<int> &index_offsets, int &collision_surface_index_offset, 
+                NeighborLUTs &neighbor_luts, unsigned int x, unsigned int y, unsigned int z, unsigned int side,
+                const int voxel_index, const VoxelBlockyModel::BakedData &voxel,
+                const VoxelBlockyModel::BakedData::Model &model);
 
         template <typename Type_T>
         void generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
@@ -65,9 +79,9 @@ public:
 
         template <typename Type_T>
         void generate_blocky_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
-		VoxelMesher::Output::CollisionSurface *collision_surface, const VoxelBufferInternal &voxels, const Span<Type_T> type_buffer,
-		const Vector3i block_size, const VoxelBlockyLibraryBase::BakedData &library, bool bake_occlusion,
-		float baked_occlusion_darkness);
+		VoxelMesher::Output::CollisionSurface *collision_surface, const VoxelBufferInternal &voxels,
+                const Span<Type_T> type_buffer, const Vector3i block_size, const VoxelSideLibrary::BakedData &side_library,
+                const VoxelBlockyLibraryBase::BakedData &voxel_library, bool bake_occlusion, float baked_occlusion_darkness);
 
 #ifdef TOOLS_ENABLED
 	void get_configuration_warnings(PackedStringArray &out_warnings) const override;

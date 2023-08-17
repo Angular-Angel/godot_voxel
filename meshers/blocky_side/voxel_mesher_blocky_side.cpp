@@ -52,6 +52,49 @@ Ref<Resource> VoxelMesherBlockySide::duplicate(bool p_subresources) const {
 	return c;
 }
 
+inline bool contributes_to_ao(const VoxelBlockyLibraryBase::BakedData &lib, uint32_t voxel_id) {
+	if (voxel_id < lib.models.size()) {
+		const VoxelBlockyModel::BakedData &t = lib.models[voxel_id];
+		return t.contributes_to_ao;
+	}
+	return true;
+}
+
+template <typename Type_T>
+void VoxelMesherBlockySide::shade_corners(const Span<Type_T> type_buffer, const VoxelBlockyLibraryBase::BakedData &library,
+                VoxelMesherBlocky::NeighborLUTs &neighbor_luts, unsigned int side,
+                const int voxel_index, int shaded_corner[]) {
+        // Combinatory solution for
+        // https://0fps.net/2013/07/03/ambient-occlusion-for-minecraft-like-worlds/ (inverted)
+        //	function vertexAO(side1, side2, corner) {
+        //	  if(side1 && side2) {
+        //		return 0
+        //	  }
+        //	  return 3 - (side1 + side2 + corner)
+        //	}
+
+        for (unsigned int j = 0; j < 4; ++j) {
+                const unsigned int edge = Cube::g_side_edges[side][j];
+                const int edge_neighbor_id = type_buffer[voxel_index + neighbor_luts.edges[edge]];
+                if (contributes_to_ao(library, edge_neighbor_id)) {
+                        ++shaded_corner[Cube::g_edge_corners[edge][0]];
+                        ++shaded_corner[Cube::g_edge_corners[edge][1]];
+                }
+        }
+        for (unsigned int j = 0; j < 4; ++j) {
+                const unsigned int corner = Cube::g_side_corners[side][j];
+                if (shaded_corner[corner] == 2) {
+                        shaded_corner[corner] = 3;
+                } else {
+                        const int corner_neigbor_id = type_buffer[voxel_index + neighbor_luts.corners[corner]];
+                        if (contributes_to_ao(library, corner_neigbor_id)) {
+                                ++shaded_corner[corner];
+                        }
+                }
+        }
+
+}
+
 unsigned int VoxelMesherBlockySide::get_material_count() const {
 	Parameters params;
 	{
@@ -95,11 +138,13 @@ void VoxelMesherBlockySide::generate_side_surface(std::vector<VoxelMesherBlocky:
                         bake_occlusion, baked_occlusion_darkness, shaded_corner, index_offsets,
                         collision_surface_index_offset, side, voxel, pos, surface);
 
-        
+        unsigned int material_id = 6; //side_model.material_id;
 
-        VoxelMesherBlocky::Arrays &arrays = out_arrays_per_material[side_model.material_id];
+        ERR_PRINT("Materials: " + out_arrays_per_material.size());
 
-        ZN_ASSERT(side_model.material_id >= 0 && side_model.material_id < index_offsets.size());
+        VoxelMesherBlocky::Arrays &arrays = out_arrays_per_material[material_id];
+
+        ZN_ASSERT(material_id >= 0 && material_id < index_offsets.size());
 
         const std::vector<Vector3f> &side_positions = surface.side_positions[side];
         const unsigned int vertex_count = side_positions.size();
@@ -117,7 +162,7 @@ void VoxelMesherBlockySide::generate_side_surface(std::vector<VoxelMesherBlocky:
         append_side_colors(arrays, vertex_count, side, side_positions, bake_occlusion,
                         baked_occlusion_darkness, voxel.color, shaded_corner);
 
-        int &index_offset = index_offsets[side_model.material_id];
+        int &index_offset = index_offsets[material_id];
         const std::vector<int> &side_indices = surface.side_indices[side];
         const unsigned int index_count = side_indices.size();
 
@@ -216,6 +261,44 @@ int get_side_channel(unsigned int side) {
 }
 
 template <typename Type_T>
+void VoxelMesherBlockySide::generate_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
+		VoxelMesher::Output::CollisionSurface *collision_surface, const Span<Type_T> type_buffer,
+		const VoxelBlockyLibraryBase::BakedData &library, bool bake_occlusion, float baked_occlusion_darkness,
+                std::vector<int> &index_offsets, int &collision_surface_index_offset, 
+                VoxelMesherBlocky::NeighborLUTs &neighbor_luts, unsigned int x, unsigned int y, unsigned int z, unsigned int side,
+                const int voxel_index, const VoxelBlockyModel::BakedData &voxel,
+                const VoxelBlockyModel::BakedData::Model &model) {
+        if ((model.empty_sides_mask & (1 << side)) != 0) {
+                // This side is empty
+                return;
+        }
+
+        const uint32_t neighbor_voxel_id = type_buffer[voxel_index + neighbor_luts.sides[side]];
+
+        if (!is_face_visible(library, voxel, neighbor_voxel_id, side)) {
+                return;
+        }
+
+        // The face is visible
+
+        int shaded_corner[8] = { 0 };
+
+        if (bake_occlusion) {
+                shade_corners(type_buffer, library, neighbor_luts,
+                                side, voxel_index, shaded_corner);
+        }
+
+        // Subtracting 1 because the data is padded
+        Vector3f pos(x - 1, y - 1, z - 1);
+
+        for (unsigned int surface_index = 0; surface_index < model.surface_count; ++surface_index) {
+                VoxelMesherBlocky::generate_side_surface(out_arrays_per_material, collision_surface, bake_occlusion,
+                                baked_occlusion_darkness, shaded_corner, index_offsets,
+                                collision_surface_index_offset, side, voxel, pos, model.surfaces[surface_index]);
+        }
+}
+
+template <typename Type_T>
 void VoxelMesherBlockySide::generate_voxel_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface, 
                 std::vector<int> &index_offsets, int &collision_surface_index_offset,
@@ -238,44 +321,60 @@ void VoxelMesherBlockySide::generate_voxel_mesh(std::vector<VoxelMesherBlocky::A
         // Sides
         for (unsigned int side = 0; side < Cube::SIDE_COUNT; ++side) {
                 const int channel = get_side_channel(side);
-
+                
+                int side_id = 1;
+                
                 if (voxels.get_channel_compression(channel) == VoxelBufferInternal::COMPRESSION_UNIFORM) {
+
+                        /*Span<uint8_t> raw_channel;
+                        voxels.get_channel_raw(channel, raw_channel);
+                        Span<uint32_t> processed_channel = raw_channel.reinterpret_cast_to<uint32_t>();
+
+                        side_id = processed_channel[0];
+
+                        std::string text = "Side id: ";
+                        text += std::to_string(side_id);
+                        ERR_PRINT(text.c_str());*/
                         // All voxels have the same type.
                         // If it's all air, nothing to do. If it's all cubes, nothing to do either.
                         // TODO Handle edge case of uniform block with non-cubic voxels!
                         // If the type of voxel still produces geometry in this situation (which is an absurd use case but not an
                         // error), decompress into a backing array to still allow the use of the same algorithm.
-                        return;
 
                 } else if (voxels.get_channel_compression(channel) != VoxelBufferInternal::COMPRESSION_NONE) {
                         // No other form of compression is allowed
                         ERR_PRINT("VoxelMesherBlockySide received unsupported voxel compression for side: " + side);
-                        return;
+                } else {
+
+                        Span<uint8_t> raw_channel;
+                        if (!voxels.get_channel_raw(channel, raw_channel)) {
+                                /*       _
+                                //      | \
+                                //     /\ \\
+                                //    / /|\\\
+                                //    | |\ \\\
+                                //    | \_\ \\|
+                                //    |    |  )
+                                //     \   |  |
+                                //      \    /
+                                */
+                                // Case supposedly handled before...
+                                ERR_PRINT("Something wrong happened");
+                        } else {
+                                ERR_PRINT("Got here!?");
+
+                                Span<uint32_t> processed_channel = raw_channel.reinterpret_cast_to<uint32_t>();
+
+                                side_id = processed_channel[voxel_index];
+                        }
                 }
-
-                Span<uint8_t> raw_channel;
-                if (!voxels.get_channel_raw(channel, raw_channel)) {
-                        /*       _
-                        //      | \
-                        //     /\ \\
-                        //    / /|\\\
-                        //    | |\ \\\
-                        //    | \_\ \\|
-                        //    |    |  )
-                        //     \   |  |
-                        //      \    /
-                        */
-                        // Case supposedly handled before...
-                        ERR_PRINT("Something wrong happened");
-                        return;
-                }
-
-                Span<uint32_t> processed_channel = raw_channel.reinterpret_cast_to<uint32_t>();
-
-                const int side_id = processed_channel[voxel_index];
-
-                if (voxel_id == VoxelSideModel::EMPTY_ID || !voxel_library.has_model(voxel_id)) {
-                        generate_side_mesh(out_arrays_per_material, collision_surface, voxels, type_buffer, 
+                if (side_id == VoxelSideModel::EMPTY_ID || !side_library.has_model(side_id)) {
+                        if (side_id != VoxelSideModel::EMPTY_ID) {
+                            std::string text = "Side id: ";
+                            text += std::to_string(side_id);
+                            ERR_PRINT(text.c_str());
+                        }
+                        generate_side_mesh(out_arrays_per_material, collision_surface, type_buffer, 
                                 voxel_library, bake_occlusion, baked_occlusion_darkness,
                                 index_offsets, collision_surface_index_offset, 
                                 neighbor_luts, x, y, z, side, voxel_index, voxel, voxel_model);
@@ -283,7 +382,7 @@ void VoxelMesherBlockySide::generate_voxel_mesh(std::vector<VoxelMesherBlocky::A
 
                         const VoxelSideModel::BakedData &side_model = side_library.models[side_id];
 
-                        generate_side_mesh(out_arrays_per_material, collision_surface, voxels, type_buffer, 
+                        generate_side_mesh(out_arrays_per_material, collision_surface, type_buffer, 
                                         voxel_library, bake_occlusion, baked_occlusion_darkness,
                                         index_offsets, collision_surface_index_offset, 
                                         neighbor_luts, x, y, z, side, voxel_index, voxel, side_model, voxel_model);
@@ -305,7 +404,8 @@ std::vector<int> &get_tls_index_offsets() {
 template <typename Type_T>
 void VoxelMesherBlockySide::generate_blocky_side_mesh(std::vector<VoxelMesherBlocky::Arrays> &out_arrays_per_material,
 		VoxelMesher::Output::CollisionSurface *collision_surface, const VoxelBufferInternal &voxels, const Span<Type_T> type_buffer,
-		const Vector3i block_size, const VoxelBlockyLibraryBase::BakedData &library, bool bake_occlusion,
+		const Vector3i block_size, const VoxelSideLibrary::BakedData &side_library,
+                const VoxelBlockyLibraryBase::BakedData &voxel_library, bool bake_occlusion,
 		float baked_occlusion_darkness) {
 	// TODO Optimization: not sure if this mandates a template function. There is so much more happening in this
 	// function other than reading voxels, although reading is on the hottest path. It needs to be profiled. If
@@ -344,8 +444,8 @@ void VoxelMesherBlockySide::generate_blocky_side_mesh(std::vector<VoxelMesherBlo
 
 				const int voxel_index = y + x * row_size + z * deck_size;
 				generate_voxel_mesh(out_arrays_per_material, collision_surface, index_offsets, 
-                                                collision_surface_index_offset, neighbor_luts, type_buffer,
-                                                library, bake_occlusion, baked_occlusion_darkness,
+                                                collision_surface_index_offset, neighbor_luts, voxels, type_buffer,
+                                                side_library, voxel_library, bake_occlusion, baked_occlusion_darkness,
                                                 voxel_index, x, y, z);
 			}
 		}
@@ -360,7 +460,15 @@ void VoxelMesherBlockySide::build(VoxelMesher::Output &output, const VoxelMesher
 		params = _parameters;
 	}
 
+	SideParameters side_params;
+	{
+		RWLockRead side_rlock(_side_parameters_lock);
+		side_params = _side_parameters;
+	}
+
 	ERR_FAIL_COND(params.library.is_null());
+
+	ERR_FAIL_COND(side_params.library.is_null());
 
 	Cache &cache = get_tls_cache();
 
@@ -445,19 +553,22 @@ void VoxelMesherBlockySide::build(VoxelMesher::Output &output, const VoxelMesher
 		RWLockRead lock(params.library->get_baked_data_rw_lock());
 		const VoxelBlockyLibraryBase::BakedData &library_baked_data = params.library->get_baked_data();
 
+                RWLockRead side_lock(side_params.library->get_baked_data_rw_lock());
+		const VoxelSideLibrary::BakedData &side_library_baked_data = side_params.library->get_baked_data();
+
 		if (arrays_per_material.size() < material_count) {
 			arrays_per_material.resize(material_count);
 		}
 
 		switch (channel_depth) {
 			case VoxelBufferInternal::DEPTH_8_BIT:
-				generate_blocky_mesh(arrays_per_material, collision_surface, raw_channel, block_size,
-						library_baked_data, params.bake_occlusion, baked_occlusion_darkness);
+				generate_blocky_side_mesh(arrays_per_material, collision_surface, voxels, raw_channel, block_size,
+						side_library_baked_data, library_baked_data, params.bake_occlusion, baked_occlusion_darkness);
 				break;
 
 			case VoxelBufferInternal::DEPTH_16_BIT:
-				generate_blocky_mesh(arrays_per_material, collision_surface,
-						raw_channel.reinterpret_cast_to<uint16_t>(), block_size, library_baked_data,
+				generate_blocky_side_mesh(arrays_per_material, collision_surface, voxels,
+						raw_channel.reinterpret_cast_to<uint16_t>(), block_size, side_library_baked_data, library_baked_data,
 						params.bake_occlusion, baked_occlusion_darkness);
 				break;
 
