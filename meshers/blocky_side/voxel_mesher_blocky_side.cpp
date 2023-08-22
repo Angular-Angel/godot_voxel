@@ -52,6 +52,16 @@ Ref<Resource> VoxelMesherBlockySide::duplicate(bool p_subresources) const {
 	return c;
 }
 
+int VoxelMesherBlockySide::get_used_channels_mask() const {
+	return (1 << VoxelBufferInternal::CHANNEL_TYPE) +
+               (1 << VoxelBufferInternal::CHANNEL_SDF) +
+               (1 << VoxelBufferInternal::CHANNEL_DATA7) +
+               (1 << VoxelBufferInternal::CHANNEL_INDICES) +
+               (1 << VoxelBufferInternal::CHANNEL_WEIGHTS) +
+               (1 << VoxelBufferInternal::CHANNEL_DATA5) +
+               (1 << VoxelBufferInternal::CHANNEL_DATA6);
+}
+
 inline bool contributes_to_ao(const VoxelBlockyLibraryBase::BakedData &lib, uint32_t voxel_id) {
 	if (voxel_id < lib.models.size()) {
 		const VoxelBlockyModel::BakedData &t = lib.models[voxel_id];
@@ -131,16 +141,14 @@ void VoxelMesherBlockySide::generate_side_surface(std::vector<VoxelMesherBlocky:
 		VoxelMesher::Output::CollisionSurface *collision_surface,
 		bool bake_occlusion, float baked_occlusion_darkness, int shaded_corner[],
                 std::vector<int> &index_offsets, int &collision_surface_index_offset,
-                unsigned int side, const VoxelBlockyModel::BakedData &voxel,
+                unsigned int side, const VoxelBlockyModel::BakedData &voxel, unsigned int side_material_offset,
                 const VoxelSideModel::BakedData &side_model, const Vector3f &pos,
                 const VoxelBlockyModel::BakedData::Surface &surface) {
         VoxelMesherBlocky::generate_side_surface(out_arrays_per_material, collision_surface,
                         bake_occlusion, baked_occlusion_darkness, shaded_corner, index_offsets,
                         collision_surface_index_offset, side, voxel, pos, surface);
 
-        unsigned int material_id = 6; //side_model.material_id;
-
-        ERR_PRINT("Materials: " + out_arrays_per_material.size());
+        unsigned int material_id = side_model.material_id + side_material_offset;
 
         VoxelMesherBlocky::Arrays &arrays = out_arrays_per_material[material_id];
 
@@ -238,7 +246,8 @@ void VoxelMesherBlockySide::generate_side_mesh(std::vector<VoxelMesherBlocky::Ar
         for (unsigned int surface_index = 0; surface_index < voxel_model.surface_count; ++surface_index) {
                 generate_side_surface(out_arrays_per_material, collision_surface, bake_occlusion,
                                 baked_occlusion_darkness, shaded_corner, index_offsets,
-                                collision_surface_index_offset, side, voxel, side_model, pos, voxel_model.surfaces[surface_index]);
+                                collision_surface_index_offset, side, voxel, library.indexed_materials_count,
+                                side_model, pos, voxel_model.surfaces[surface_index]);
         }
 }
 
@@ -322,24 +331,11 @@ void VoxelMesherBlockySide::generate_voxel_mesh(std::vector<VoxelMesherBlocky::A
         for (unsigned int side = 0; side < Cube::SIDE_COUNT; ++side) {
                 const int channel = get_side_channel(side);
                 
-                int side_id = 1;
+                int side_id = 0;
                 
                 if (voxels.get_channel_compression(channel) == VoxelBufferInternal::COMPRESSION_UNIFORM) {
-
-                        /*Span<uint8_t> raw_channel;
-                        voxels.get_channel_raw(channel, raw_channel);
-                        Span<uint32_t> processed_channel = raw_channel.reinterpret_cast_to<uint32_t>();
-
-                        side_id = processed_channel[0];
-
-                        std::string text = "Side id: ";
-                        text += std::to_string(side_id);
-                        ERR_PRINT(text.c_str());*/
                         // All voxels have the same type.
-                        // If it's all air, nothing to do. If it's all cubes, nothing to do either.
-                        // TODO Handle edge case of uniform block with non-cubic voxels!
-                        // If the type of voxel still produces geometry in this situation (which is an absurd use case but not an
-                        // error), decompress into a backing array to still allow the use of the same algorithm.
+                        side_id = voxels.get_voxel(x, y, z, channel);
 
                 } else if (voxels.get_channel_compression(channel) != VoxelBufferInternal::COMPRESSION_NONE) {
                         // No other form of compression is allowed
@@ -361,7 +357,6 @@ void VoxelMesherBlockySide::generate_voxel_mesh(std::vector<VoxelMesherBlocky::A
                                 // Case supposedly handled before...
                                 ERR_PRINT("Something wrong happened");
                         } else {
-                                ERR_PRINT("Got here!?");
 
                                 Span<uint32_t> processed_channel = raw_channel.reinterpret_cast_to<uint32_t>();
 
@@ -370,7 +365,7 @@ void VoxelMesherBlockySide::generate_voxel_mesh(std::vector<VoxelMesherBlocky::A
                 }
                 if (side_id == VoxelSideModel::EMPTY_ID || !side_library.has_model(side_id)) {
                         if (side_id != VoxelSideModel::EMPTY_ID) {
-                            std::string text = "Side id: ";
+                            std::string text = "Side ID: ";
                             text += std::to_string(side_id);
                             ERR_PRINT(text.c_str());
                         }
@@ -382,10 +377,15 @@ void VoxelMesherBlockySide::generate_voxel_mesh(std::vector<VoxelMesherBlocky::A
 
                         const VoxelSideModel::BakedData &side_model = side_library.models[side_id];
 
+                        std::string text = "Side Material ID: ";
+                        text += std::to_string(side_model.material_id);
+                        ERR_PRINT(text.c_str());
+
                         generate_side_mesh(out_arrays_per_material, collision_surface, type_buffer, 
                                         voxel_library, bake_occlusion, baked_occlusion_darkness,
                                         index_offsets, collision_surface_index_offset, 
-                                        neighbor_luts, x, y, z, side, voxel_index, voxel, side_model, voxel_model);
+                                        neighbor_luts, x, y, z, side, voxel_index, voxel,
+                                        side_model, voxel_model);
                 }
         }
 

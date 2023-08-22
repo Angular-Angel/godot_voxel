@@ -33,6 +33,8 @@ public:
 	Ref<Resource> duplicate(bool p_subresources = false) const;
 #endif
 
+	int get_used_channels_mask() const override;
+
         unsigned int get_material_count() const override;
 
 	Ref<Material> get_material_by_index(unsigned int index) const override;
@@ -46,7 +48,7 @@ public:
 		VoxelMesher::Output::CollisionSurface *collision_surface,
 		bool bake_occlusion, float baked_occlusion_darkness, int shaded_corner[],
                 std::vector<int> &index_offsets, int &collision_surface_index_offset,
-                unsigned int side, const VoxelBlockyModel::BakedData &voxel,
+                unsigned int side, const VoxelBlockyModel::BakedData &voxel, unsigned int side_material_offset,
                 const VoxelSideModel::BakedData &side_model, const Vector3f &pos,
                 const VoxelBlockyModel::BakedData::Surface &surface);
 
