@@ -257,13 +257,13 @@ int get_side_channel(unsigned int side) {
             return VoxelBufferInternal::CHANNEL_SDF;
         case Cube::SIDE_BOTTOM:
             return VoxelBufferInternal::CHANNEL_DATA7;
-        case Cube::SIDE_FRONT:
-            return VoxelBufferInternal::CHANNEL_INDICES;
         case Cube::SIDE_BACK:
+            return VoxelBufferInternal::CHANNEL_INDICES;
+        case Cube::SIDE_FRONT:
             return VoxelBufferInternal::CHANNEL_WEIGHTS;
-        case Cube::SIDE_LEFT:
-            return VoxelBufferInternal::CHANNEL_DATA5;
         case Cube::SIDE_RIGHT:
+            return VoxelBufferInternal::CHANNEL_DATA5;
+        case Cube::SIDE_LEFT:
             return VoxelBufferInternal::CHANNEL_DATA6;
         }
         
@@ -374,12 +374,7 @@ void VoxelMesherBlockySide::generate_voxel_mesh(std::vector<VoxelMesherBlocky::A
                                 index_offsets, collision_surface_index_offset, 
                                 neighbor_luts, x, y, z, side, voxel_index, voxel, voxel_model);
                 } else {
-
                         const VoxelSideModel::BakedData &side_model = side_library.models[side_id];
-
-                        std::string text = "Side Material ID: ";
-                        text += std::to_string(side_model.material_id);
-                        ERR_PRINT(text.c_str());
 
                         generate_side_mesh(out_arrays_per_material, collision_surface, type_buffer, 
                                         voxel_library, bake_occlusion, baked_occlusion_darkness,
