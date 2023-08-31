@@ -364,11 +364,6 @@ void VoxelMesherBlockySide::generate_voxel_mesh(std::vector<VoxelMesherBlocky::A
                         }
                 }
                 if (side_id == VoxelSideModel::EMPTY_ID || !side_library.has_model(side_id)) {
-                        if (side_id != VoxelSideModel::EMPTY_ID) {
-                            std::string text = "Side ID: ";
-                            text += std::to_string(side_id);
-                            ERR_PRINT(text.c_str());
-                        }
                         generate_side_mesh(out_arrays_per_material, collision_surface, type_buffer, 
                                 voxel_library, bake_occlusion, baked_occlusion_darkness,
                                 index_offsets, collision_surface_index_offset, 
